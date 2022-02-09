@@ -21,7 +21,7 @@ if (process.argv.length < 2 || process.argv.length > 6) {
 const bot = mineflayer.createBot({
     username: process.argv[2] || 'Pato',
     host: process.argv[3],
-    port: process.argv[4]
+    port: process.argv[3]
 })
 
 bot.loadPlugin(toolPlugin)
@@ -52,7 +52,7 @@ bot.on('playerCollect', (collector, itemDrop) => {
 
 
 
-//////////////////////////////// Protect Function//////////////////////////////
+//////////////////////////////// Protect Function /////////////////////////////
 let guardPos = null
 
 function guardArea (pos) {
