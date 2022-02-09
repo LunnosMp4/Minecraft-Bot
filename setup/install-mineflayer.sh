@@ -1,4 +1,7 @@
-cd ..
+##
+##Execute to the root of the Project
+##
+
 npm i mineflayer --save
 npm i mineflayer-navigate --save
 npm i mineflayer-pathfinder --save
