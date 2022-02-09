@@ -11,6 +11,7 @@ const pvp = require('mineflayer-pvp').plugin
 const collectBlock = require('mineflayer-collectblock').plugin
 const toolPlugin = require('mineflayer-tool').plugin
 const armorManager = require('mineflayer-armor-manager')
+const inventoryViewer = require('mineflayer-web-inventory')
 
 if (process.argv.length < 2 || process.argv.length > 6) {
     console.log('Usage : node bot.js <name> <host> <password> <port>')
@@ -29,7 +30,7 @@ bot.loadPlugin(armorManager)
 bot.loadPlugin(pathfinder)
 bot.loadPlugin(pvp)
 
-
+inventoryViewer(bot)
 
 //////////////////////////////// Collect Item //////////////////////////////////
 bot.on('playerCollect', (collector, itemDrop) => {
@@ -168,9 +169,10 @@ bot.on('chat', (username, message) => {
         bot.pvp.stop()
     else { // START COLLECT BLOCK -> collect <block>
         const args = message.split(' ')
-        if (args[0] !== 'collect') return
-        let count = 1
 
+
+        if (args[0] !== 'collect') return
+            let count = 1
         if (args.length === 3) count = parseInt(args[1])
             let type = args[1]
         if (args.length === 3) type = args[2]
@@ -204,6 +206,7 @@ bot.on('chat', (username, message) => {
             bot.chat('Done')
             }
         })
+
     }
 })
 ///////////////////////////////////////////////////////////////////////////////
