@@ -107,11 +107,17 @@ bot.on('physicTick', () => {
 
 
 
+
+/////////////////////////////////// When Spawn ////////////////////////////////
 bot.once('spawn', () => {
     const mcData = require('minecraft-data')(bot.version)
     const defaultMove = new Movements(bot, mcData)
 })
+///////////////////////////////////////////////////////////////////////////////
 
+
+
+/////////////////////////////////// On Chat ///////////////////////////////////
 bot.on('chat', (username, message) => {
     const mcData = require('minecraft-data')(bot.version)
     const defaultMove = new Movements(bot, mcData)
@@ -130,13 +136,13 @@ bot.on('chat', (username, message) => {
         bot.chat('  s[command]-> El pato stop [command]')
     } else if (args[0] === 'attack')
         attackEntity()
-    else if (args[0] === "follow" || args[0] === "flw")
+    else if (args[0] === "follow" || args[0] === "flw") // START FOLLOW
         followPlayer(username)
-    else if (args[0] === "testtt")
+    else if (args[0] === "debug") // DEBUG
         bot.chat(target)
-    else if (args[0] === "sflw")
+    else if (args[0] === "sfollow" || args[0] === "sflw") // STOP FOLLOW
         bot.pathfinder.stop()
-    else if (args[0] === 'come') //come command
+    else if (args[0] === 'come') // COME TO ME
         comeToMe(username)
     else if (args[0] === 'guard') {
         const player = bot.players[username]
@@ -146,7 +152,7 @@ bot.on('chat', (username, message) => {
         }
         bot.chat('I will guard that location.')
         guardArea(player.entity.position)
-    } else if (args[0] === 'fight') {
+    } else if (args[0] === 'fight') { // START PVP
         const player = bot.players[username]
         if (!player) {
           bot.chat("I can't see you.")
@@ -155,12 +161,12 @@ bot.on('chat', (username, message) => {
         bot.chat('Prepare to fight!')
         bot.pvp.attack(player.entity)
       }
-      if (args[0] === 'sguard') {
+      if (args[0] === 'sguard') { // STOP GUARD
         bot.chat("I'm friendly now !")
         stopGuarding()
-      } else if (args[0] === 'sfight') //stop pvp command
+      } else if (args[0] === 'sfight') // STOP PVP
         bot.pvp.stop()
-    else { //do collector -> collect <block>
+    else { // START COLLECT BLOCK -> collect <block>
         const args = message.split(' ')
         if (args[0] !== 'collect') return
         let count = 1
@@ -184,14 +190,12 @@ bot.on('chat', (username, message) => {
             bot.chat("I don't see that block nearby.")
             return
         }
-
         const targets = []
         for (let i = 0; i < Math.min(blocks.length, count); i++) {
             targets.push(bot.blockAt(blocks[i]))
         }
 
         bot.chat(`Found ${targets.length} ${type}(s)`)
-
         bot.collectBlock.collect(targets, err => {
             if (err) {
             bot.chat(err.message)
@@ -202,6 +206,8 @@ bot.on('chat', (username, message) => {
         })
     }
 })
+///////////////////////////////////////////////////////////////////////////////
+
 
 
 /////////////////////// Attack Nearly Player////////////////////////
