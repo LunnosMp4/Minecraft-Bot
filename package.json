@@ -4,6 +4,7 @@
     "minecraft-wrap": "^1.4.0",
     "mineflayer": "^3.18.0",
     "mineflayer-armor-manager": "^1.4.2",
+    "mineflayer-auto-eat": "^2.3.3",
     "mineflayer-collectblock": "^1.3.4",
     "mineflayer-navigate": "^0.0.10",
     "mineflayer-pathfinder": "^1.9.1",

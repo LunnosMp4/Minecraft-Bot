@@ -4,6 +4,7 @@
 
 //const comeToMe = require('./command/come.js')
 const mineflayer = require('mineflayer')
+const { Vec3 } = require('vec3')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
 const GoalFollow = goals.GoalFollow
 const { GoalNear } = require('mineflayer-pathfinder').goals
@@ -12,6 +13,7 @@ const collectBlock = require('mineflayer-collectblock').plugin
 const toolPlugin = require('mineflayer-tool').plugin
 const armorManager = require('mineflayer-armor-manager')
 const inventoryViewer = require('mineflayer-web-inventory')
+const autoeat = require("mineflayer-auto-eat")
 const { mineflayer: mineflayerViewer } = require('prismarine-viewer')
 
 if (process.argv.length < 2 || process.argv.length > 6) {
@@ -28,6 +30,7 @@ const bot = mineflayer.createBot({
 bot.loadPlugin(toolPlugin)
 bot.loadPlugin(collectBlock)
 bot.loadPlugin(armorManager)
+bot.loadPlugin(autoeat)
 bot.loadPlugin(pathfinder)
 bot.loadPlugin(pvp)
 
@@ -44,18 +47,33 @@ function getWeapons() {
 
 
 
+//////////////////////////////// Random Number //////////////////////////////////
+function getRandomInt(max) {
+    return Math.floor(Math.random() * max);
+}
+///////////////////////////////////////////////////////////////////////////////
+
+
+
 //////////////////////////////// Protect Function /////////////////////////////
 let guardPos = null
 
-function guardArea (pos, username) {
-    guardPos = pos.clone()
-
-    if (!bot.pvp.target)
-        followPlayer(username)
+function guardArea (pos, args) {
+    pos = pos.entity.position
+    guardPos = pos.clone();
+    if (!bot.pvp.target) {
+        if (args.length === 2)
+            followPlayer(args[1])
+        else
+            moveToGuardPos()
+    }
 
     bot.on('stoppedAttacking', () => {
         if (guardPos) {
-          followPlayer(username)
+            if (args.length === 2)
+                followPlayer(args[1])
+            else
+                moveToGuardPos()
         }
     })
 }
@@ -88,7 +106,9 @@ bot.on('physicTick', () => {
     if (!guardPos) return
 
     const filter = e => e.type === 'mob' && e.position.distanceTo(bot.entity.position) < 16 &&
-                        e.mobType !== 'Armor Stand'
+                        e.mobType !== 'Armor Stand' &&
+                        e.mobType !== 'Villager' &&
+                        e.mobType !== 'Iron Golem'
 
     const entity = bot.nearestEntity(filter)
     if (entity) {
@@ -99,11 +119,93 @@ bot.on('physicTick', () => {
 
 
 
+//////////////////////////////////// Auto Eat /////////////////////////////////
+bot.on("autoeat_started", () => {
+    console.log("Auto Eat started!")
+})
+
+bot.on("autoeat_stopped", () => {
+    getWeapons()
+})
+
+bot.on("health", () => {
+if (bot.food === 20)
+    bot.autoEat.disable()
+else bot.autoEat.enable()
+})
+///////////////////////////////////////////////////////////////////////////////
+
+
 
 /////////////////////////////////// When Spawn ////////////////////////////////
 bot.once('spawn', () => {
     const mcData = require('minecraft-data')(bot.version)
     const defaultMove = new Movements(bot, mcData)
+    bot.autoEat.options.priority = "foodPoints"
+    bot.autoEat.options.bannedFood = []
+    bot.autoEat.options.eatingTimeout = 3
+
+    bot.autoEat.options = {
+        priority: "foodPoints",
+        startAt: 14,
+        bannedFood: ["golden_apple", "enchanted_golden_apple", "rotten_flesh"],
+    }
+})
+///////////////////////////////////////////////////////////////////////////////
+
+let home = null
+
+function moveToHomePos (home) {
+    const mcData = require('minecraft-data')(bot.version)
+    bot.pathfinder.setMovements(new Movements(bot, mcData))
+    bot.pathfinder.setGoal(new goals.GoalBlock(home.x, home.y, home.z))
+}
+
+////////////////////////////////// When Collect ///////////////////////////////
+bot.on('chat', (username, message) => {
+    const mcData = require('minecraft-data')(bot.version)
+    const defaultMove = new Movements(bot, mcData)
+    const args = message.split(' ')
+
+    if (args[0] !== 'collect') return
+    let count = 1
+    if (args.length === 3) count = parseInt(args[1])
+    let type = args[1]
+    if (args.length === 3) type = args[2]
+    const blockType = mcData.blocksByName[type]
+    if (!blockType) {
+        bot.chat(`"I don't know any blocks named ${type}.`)
+        return
+    }
+
+    home = bot.players[username].entity.position
+    
+    const blocks = bot.findBlocks({
+        matching: blockType.id,
+        maxDistance: 64,
+        count: count
+    })
+
+    if (blocks.length === 0) {
+        bot.chat("I don't see that block nearby.")
+        return
+    }
+
+    const targets = []
+    for (let i = 0; i < Math.min(blocks.length, count); i++) {
+        targets.push(bot.blockAt(blocks[i]))
+    }
+
+    bot.chat(`Found ${targets.length} ${type}(s)`)
+    bot.collectBlock.collect(targets, err => {
+        if (err) {
+        bot.chat(err.message)
+        console.log(err)
+        } else {
+        bot.chat('Done')
+        moveToHomePos(home)
+        }
+    })
 })
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -115,10 +217,10 @@ bot.on('chat', (username, message) => {
     const defaultMove = new Movements(bot, mcData)
 
     const args = message.split(' ')
-    if (username === bot.username) return
-    const target = bot.players[username] ? bot.players[username].entity : null
     if (args.length === 2)
         username = args[1]
+    if (username === bot.username) return
+    const target = bot.players[username] ? bot.players[username].entity : null
     if (args[0] === 'help') { //help command
         bot.chat('Commands :')
         bot.chat('  Come -> El pato comes to you')
@@ -128,22 +230,24 @@ bot.on('chat', (username, message) => {
         bot.chat('  s[command]-> El pato stop [command]')
     } else if (args[0] === 'attack')
         attackEntity()
-    else if (args[0] === "follow" || args[0] === "flw") // START FOLLOW
+    else if (args[0] === "follow" || args[0] === "flw") { // START FOLLOW
         followPlayer(username)
-    else if (args[0] === "debug") // DEBUG
-        bot.chat(target)
+    } else if (args[0] === "debug") // DEBUG
+        bot.chat("tp" + username)
     else if (args[0] === "sfollow" || args[0] === "sflw") // STOP FOLLOW
         bot.pathfinder.stop()
     else if (args[0] === 'come') // COME TO ME
         comeToMe(username)
-    else if (args[0] === 'guard') {
+    else if (args[0] === 'guard') { // START GUARD
         const player = bot.players[username]
         if (!player) {
           bot.chat("I can't see you.")
           return
         }
+
+        getWeapons()
         bot.chat('I will guard that location.')
-        guardArea(player.entity.position, username)
+        guardArea(player, args)
     } else if (args[0] === 'fight') { // START PVP
         const player = bot.players[username]
         if (!player) {
@@ -162,47 +266,6 @@ bot.on('chat', (username, message) => {
         bot.chat("Health :" + ' ' + bot.health)
         bot.chat("Food :" + ' ' + bot.food)
         bot.chat("XP Levels :" + ' ' + bot.experience.level)
-    }
-    else { // START COLLECT BLOCK -> collect <block>
-        const args = message.split(' ')
-
-        if (args[0] !== 'collect') return
-            let count = 1
-        if (args.length === 3) count = parseInt(args[1])
-            let type = args[1]
-        if (args.length === 3) type = args[2]
-            const blockType = mcData.blocksByName[type]
-        if (!blockType) {
-            bot.chat(`"I don't know any blocks named ${type}.`)
-            return
-        }
-
-        const blocks = bot.findBlocks({
-            matching: blockType.id,
-            maxDistance: 64,
-            count: count
-        })
-
-        if (blocks.length === 0) {
-            bot.chat("I don't see that block nearby.")
-            return
-        }
-
-        const targets = []
-        for (let i = 0; i < Math.min(blocks.length, count); i++) {
-            targets.push(bot.blockAt(blocks[i]))
-        }
-
-        bot.chat(`Found ${targets.length} ${type}(s)`)
-        bot.collectBlock.collect(targets, err => {
-            if (err) {
-            bot.chat(err.message)
-            console.log(err)
-            } else {
-            bot.chat('Done')
-            }
-        })
-
     }
 })
 ///////////////////////////////////////////////////////////////////////////////
@@ -257,8 +320,6 @@ function followPlayer(username) {
     bot.pathfinder.setGoal(goal, true)
 }
 //////////////////////////////////////////////////////////////////
-
-
 
 bot.on('kicked', console.log)
 bot.on('error', console.log)
