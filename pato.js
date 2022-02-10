@@ -2,7 +2,6 @@
 /*/ Made by Lunnos and Doud Irow /*/
 /*//*//*//*//*//*//*//*//*//*//*//*/
 
-//const comeToMe = require('./command/come.js')
 const mineflayer = require('mineflayer')
 const { Vec3 } = require('vec3')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
@@ -23,8 +22,9 @@ if (process.argv.length < 2 || process.argv.length > 6) {
 
 const bot = mineflayer.createBot({
     username: process.argv[2] || 'Pato',
-    host: process.argv[3],
-    port: process.argv[4]
+    host: process.argv[3]
+    // ,
+    // port: process.argv[3]
 })
 
 bot.loadPlugin(toolPlugin)
@@ -36,7 +36,7 @@ bot.loadPlugin(pvp)
 
 inventoryViewer(bot)
 
-//////////////////////////////// Collect Item //////////////////////////////////
+//////////////////////////////// Get Weapons //////////////////////////////////
 function getWeapons() {
     const sword = bot.inventory.items().find(item => item.name.includes('sword'))
     if (sword) bot.equip(sword, 'hand')
@@ -47,11 +47,47 @@ function getWeapons() {
 
 
 
+//////////////////////////////// Drop Items //////////////////////////////////
+function dropItems(args) {
+    if (args.length < 2 || args.length > 3) {
+        bot.chat("please specify a block")
+        return
+    }
+    const mcData = require('minecraft-data')(bot.version)
+    const types = args[1]
+    const blockType = mcData.blocksByName[types]
+    if (!blockType) {
+        const ItemType = mcData.itemsByName[types]
+        if (!ItemType) {
+            bot.chat(`I don't know any items named ${types}.`)
+            return
+        }
+    }
+    if (bot.inventory.items().find(item => item.name.includes(args[1]))) {
+        if (!blockType) {
+            const ItemType = mcData.itemsByName[types]
+            if (!ItemType) {
+                return
+            }
+            bot.chat("I give you this !")
+            bot.toss(ItemType.id, null, 1);
+        } else {
+            bot.chat("I give you this !")
+            let count = 1
+            bot.toss(blockType.id, null, count);
+        }
+    } else
+        bot.chat("I don't have this item currently!");
+}
+///////////////////////////////////////////////////////////////////////////////
+
+
+
 //////////////////////////////// Random Number //////////////////////////////////
 function getRandomInt(max) {
     return Math.floor(Math.random() * max);
 }
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -64,8 +100,9 @@ function guardArea (pos, args) {
     if (!bot.pvp.target) {
         if (args.length === 2)
             followPlayer(args[1])
-        else
+        else {
             moveToGuardPos()
+        }
     }
 
     bot.on('stoppedAttacking', () => {
@@ -108,10 +145,12 @@ bot.on('physicTick', () => {
     const filter = e => e.type === 'mob' && e.position.distanceTo(bot.entity.position) < 16 &&
                         e.mobType !== 'Armor Stand' &&
                         e.mobType !== 'Villager' &&
-                        e.mobType !== 'Iron Golem'
+                        e.mobType !== 'Iron Golem' &&
+                        e.mobType !== 'Bat'
 
     const entity = bot.nearestEntity(filter)
     if (entity) {
+        getWeapons()
         bot.pvp.attack(entity)
     }
 })
@@ -139,6 +178,7 @@ else bot.autoEat.enable()
 
 /////////////////////////////////// When Spawn ////////////////////////////////
 bot.once('spawn', () => {
+    bot.chat("Hi, I'm Pato, don't call me from too far or I will leave !")
     const mcData = require('minecraft-data')(bot.version)
     const defaultMove = new Movements(bot, mcData)
     bot.autoEat.options.priority = "foodPoints"
@@ -160,15 +200,13 @@ let home = null
 function moveToHomePos (home) {
     const mcData = require('minecraft-data')(bot.version)
     bot.pathfinder.setMovements(new Movements(bot, mcData))
-    bot.pathfinder.setGoal(new goals.GoalBlock(home.x, home.y, home.z))
+    bot.pathfinder.setGoal(new goals.GoalBlock(home.x -1, home.y, home.z -1))
 }
 
-bot.on('chat', (username, message) => {
+function collecting(args, username) {
     const mcData = require('minecraft-data')(bot.version)
     const defaultMove = new Movements(bot, mcData)
-    const args = message.split(' ')
 
-    if (args[0] !== 'collect') return
     let count = 1
     if (args.length === 3) count = parseInt(args[1])
     let type = args[1]
@@ -180,7 +218,7 @@ bot.on('chat', (username, message) => {
     }
 
     home = bot.players[username].entity.position
-    
+
     const blocks = bot.findBlocks({
         matching: blockType.id,
         maxDistance: 64,
@@ -207,6 +245,12 @@ bot.on('chat', (username, message) => {
         moveToHomePos(home)
         }
     })
+}
+
+bot.on('chat', (username, message) => {
+    const args = message.split(' ')
+    if (args[0] !== 'collect') return
+    collecting(args, username)
 })
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -214,10 +258,35 @@ bot.on('chat', (username, message) => {
 
 //////////////////////////////////// Go Sleep /////////////////////////////////
 bot.on('time', () => {
-    const filter = e => e.type === 'mob' && e.position.distanceTo(bot.entity.position) < 16 &&
+    // We don't want our Bot attacking passive mobs while sleeping
+    const filter = e => e.type === 'mob' && e.position.distanceTo(bot.entity.position) < 6 &&
                         e.mobType !== 'Armor Stand' &&
                         e.mobType !== 'Villager' &&
-                        e.mobType !== 'Iron Golem'
+                        e.mobType !== 'Cow' &&
+                        e.mobType !== 'Pig' &&
+                        e.mobType !== 'Horse' &&
+                        e.mobType !== 'Donkey' &&
+                        e.mobType !== 'Dolphin' &&
+                        e.mobType !== 'Panda' &&
+                        e.mobType !== 'Fox' &&
+                        e.mobType !== 'Ocelot' &&
+                        e.mobType !== 'Sheep' &&
+                        e.mobType !== 'Llama' &&
+                        e.mobType !== 'Turtle' &&
+                        e.mobType !== 'Wolf' &&
+                        e.mobType !== 'Squid' &&
+                        e.mobType !== 'Rabbit' &&
+                        e.mobType !== 'Salmon' &&
+                        e.mobType !== 'Pufferfish' &&
+                        e.mobType !== 'Parrot' &&
+                        e.mobType !== 'Mule' &&
+                        e.mobType !== 'Mooshroom' &&
+                        e.mobType !== 'Goat' &&
+                        e.mobType !== 'Chicken' &&
+                        e.mobType !== 'Cat' &&
+                        e.mobType !== 'Axolotl' &&
+                        e.mobType !== 'Tropical Fish' &&
+                        e.mobType !== 'Cod'
     const entity = bot.nearestEntity(filter)
     if (!bot.time.isDay && !bot.isSleeping && !entity)
         goToSleep()
@@ -291,9 +360,11 @@ bot.on('chat', (username, message) => {
           bot.chat("I can't see you.")
           return
         }
-
         getWeapons()
-        bot.chat('I will guard that location.')
+        if (args.length === 2)
+            bot.chat('I will protect this player.')
+        else
+            bot.chat('I will guard that location.')
         guardArea(player, args)
     } else if (args[0] === 'fight') { // START PVP
         const player = bot.players[username]
@@ -313,6 +384,8 @@ bot.on('chat', (username, message) => {
         bot.chat("Health :" + ' ' + bot.health)
         bot.chat("Food :" + ' ' + bot.food)
         bot.chat("XP Levels :" + ' ' + bot.experience.level)
+    } else if (args[0] === 'drop') {
+        dropItems(args)
     }
 })
 ///////////////////////////////////////////////////////////////////////////////
