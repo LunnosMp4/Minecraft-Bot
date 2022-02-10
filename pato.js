@@ -3,8 +3,9 @@
 /*//*//*//*//*//*//*//*//*//*//*//*/
 
 const mineflayer = require('mineflayer')
-const { Vec3 } = require('vec3')
+const {vec3} = require('vec3')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
+const navigatePlugin = require('mineflayer-navigate');
 const GoalFollow = goals.GoalFollow
 const { GoalNear } = require('mineflayer-pathfinder').goals
 const pvp = require('mineflayer-pvp').plugin
@@ -22,9 +23,8 @@ if (process.argv.length < 2 || process.argv.length > 6) {
 
 const bot = mineflayer.createBot({
     username: process.argv[2] || 'Pato',
-    host: process.argv[3]
-    // ,
-    // port: process.argv[3]
+    host: process.argv[3],
+    port: process.argv[4]
 })
 
 bot.loadPlugin(toolPlugin)
@@ -33,6 +33,7 @@ bot.loadPlugin(armorManager)
 bot.loadPlugin(autoeat)
 bot.loadPlugin(pathfinder)
 bot.loadPlugin(pvp)
+bot.loadPlugin(navigatePlugin)
 
 inventoryViewer(bot)
 
@@ -88,6 +89,116 @@ function getRandomInt(max) {
     return Math.floor(Math.random() * max);
 }
 ////////////////////////////////////////////////////////////////////////////////
+
+
+
+///////////////////////////////////// Chest ////////////////////////////////////
+function sayItems (items = bot.inventory.items()) {
+    const output = items.map(itemToString).join(', ')
+    if (output) {
+      bot.chat(output)
+    } else {
+      bot.chat('empty')
+    }
+}
+
+function itemToString (item) {
+    if (item) {
+      return `${item.name} x ${item.count}`
+    } else {
+      return '(nothing)'
+    }
+}
+
+async function watchChest (minecart, blocks = []) {
+    const mcData = require('minecraft-data')(bot.version)
+    let chestToOpen
+    if (minecart) {
+      chestToOpen = Object.keys(bot.entities)
+        .map(id => bot.entities[id]).find(e => e.entityType === mcData.entitiesByName.chest_minecart &&
+        e.objectData.intField === 1 &&
+        bot.entity.position.distanceTo(e.position) < 3)
+      if (!chestToOpen) {
+        bot.chat('no chest minecart found')
+        return
+      }
+    } else {
+      chestToOpen = bot.findBlock({
+        matching: blocks.map(name => mcData.blocksByName[name].id),
+        maxDistance: 64
+      })
+
+      if (!chestToOpen) {
+        bot.chat('no chest found')
+        return
+      }
+      const p = chestToOpen.position
+      const defaultMove = new Movements(bot, mcData)
+      bot.pathfinder.setMovements(defaultMove)
+      bot.pathfinder.setGoal(new GoalNear(p.x, p.y, p.z, 1))
+    }
+    const chest = await bot.openChest(chestToOpen)
+    sayItems(chest.containerItems())
+    chest.on('updateSlot', (slot, oldItem, newItem) => {
+      bot.chat(`chest update: ${itemToString(oldItem)} -> ${itemToString(newItem)} (slot: ${slot})`)
+    })
+    chest.on('close', () => {
+      bot.chat('chest closed')
+    })
+  
+    bot.on('chat', onChat)
+  
+    function onChat (username, message) {
+      if (username === bot.username) return
+      const command = message.split(' ')
+      switch (true) {
+        case /^close$/.test(message):
+          closeChest()
+          break
+        case /^take \d+ \w+$/.test(message):
+          withdrawItem(command[2], command[1])
+          break
+        case /^deposit \d+ \w+$/.test(message):
+          depositItem(command[2], command[1])
+          break
+      }
+    }
+  
+    function closeChest () {
+      chest.close()
+      bot.removeListener('chat', onChat)
+    }
+  
+    async function withdrawItem (name, amount) {
+      const item = chest.containerItems().find(item => item.name.includes(name))
+      if (item) {
+        try {
+          await chest.withdraw(item.type, null, amount)
+          bot.chat(`withdrew ${amount} ${item.name}`)
+        } catch (err) {
+          bot.chat(`unable to withdraw ${amount} ${item.name}`)
+        }
+      } else {
+        bot.chat(`unknown item ${name}`)
+      }
+    }
+  
+    async function depositItem (name, amount) {
+      const item = bot.inventory.items().find(item => item.name.includes(name))
+      if (item) {
+        try {
+          await chest.deposit(item.type, null, amount)
+          bot.chat(`deposited ${amount} ${item.name}`)
+        } catch (err) {
+          bot.chat(`unable to deposit ${amount} ${item.name}`)
+        }
+      } else {
+        bot.chat(`unknown item ${name}`)
+      }
+    }
+}
+////////////////////////////////////////////////////////////////////////////////
+
 
 
 
@@ -339,11 +450,18 @@ bot.on('chat', (username, message) => {
     const target = bot.players[username] ? bot.players[username].entity : null
     if (args[0] === 'help') { //help command
         bot.chat('Commands :')
-        bot.chat('  Come -> El pato comes to you')
-        bot.chat('  Fight me -> El pato follow you and attack you until your death')
-        bot.chat('  Follow -> Follow the person')
-        bot.chat('  Guard -> El pato attack the nearest entity')
-        bot.chat('  s[command]-> El pato stop [command]')
+        bot.chat('  come -> El pato comes to you')
+        bot.chat('  fight me -> El pato follow you and attack you until your death')
+        bot.chat('  follow / flw -> Follow the person')
+        bot.chat('  guard -> El pato guard an area')
+        bot.chat('  guard [Player] -> El pato protect and follow a player')
+        bot.chat('  s[command] -> El pato stop [command]')
+        bot.chat('  drop [item] -> Drop [item] from his inventory')
+        bot.chat('  stat -> Show Health, Food and XP level of the bot')
+        bot.chat('  chest -> Go to nearest and open it')
+        bot.chat('  > In chest > close -> Close the chest')
+        bot.chat("  > In chest > take [x] [item] -> Withdraw [x] [items] from the chest")
+        bot.chat("  > In chest > deposit [x] [item] -> Deposit [x] [items] in the chest")
     } else if (args[0] === 'attack')
         attackEntity()
     else if (args[0] === "follow" || args[0] === "flw") { // START FOLLOW
@@ -386,7 +504,10 @@ bot.on('chat', (username, message) => {
         bot.chat("XP Levels :" + ' ' + bot.experience.level)
     } else if (args[0] === 'drop') {
         dropItems(args)
-    }
+    } else if (args[0] === 'chest')
+        watchChest(false, ['chest', 'ender_chest', 'trapped_chest'])
+    else if (args[0] === 'stop')
+        return
 })
 ///////////////////////////////////////////////////////////////////////////////
 

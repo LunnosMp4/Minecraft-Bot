@@ -15,3 +15,4 @@ npm i mineflayer-tool --save
 npm i mineflayer-pvp --save
 npm i mineflayer-web-inventory --save
 npm i mineflayer-auto-eat --save
+npm i prismarine-recipe --save
