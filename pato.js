@@ -112,7 +112,7 @@ bot.on('physicTick', () => {
 
     const entity = bot.nearestEntity(filter)
     if (entity) {
-      bot.pvp.attack(entity)
+        bot.pvp.attack(entity)
     }
 })
 ///////////////////////////////////////////////////////////////////////////////
@@ -153,6 +153,8 @@ bot.once('spawn', () => {
 })
 ///////////////////////////////////////////////////////////////////////////////
 
+
+////////////////////////////////// When Collect ///////////////////////////////
 let home = null
 
 function moveToHomePos (home) {
@@ -161,7 +163,6 @@ function moveToHomePos (home) {
     bot.pathfinder.setGoal(new goals.GoalBlock(home.x, home.y, home.z))
 }
 
-////////////////////////////////// When Collect ///////////////////////////////
 bot.on('chat', (username, message) => {
     const mcData = require('minecraft-data')(bot.version)
     const defaultMove = new Movements(bot, mcData)
@@ -174,7 +175,7 @@ bot.on('chat', (username, message) => {
     if (args.length === 3) type = args[2]
     const blockType = mcData.blocksByName[type]
     if (!blockType) {
-        bot.chat(`"I don't know any blocks named ${type}.`)
+        bot.chat(`I don't know any blocks named ${type}.`)
         return
     }
 
@@ -207,6 +208,52 @@ bot.on('chat', (username, message) => {
         }
     })
 })
+///////////////////////////////////////////////////////////////////////////////
+
+
+
+//////////////////////////////////// Go Sleep /////////////////////////////////
+bot.on('time', () => {
+    const filter = e => e.type === 'mob' && e.position.distanceTo(bot.entity.position) < 16 &&
+                        e.mobType !== 'Armor Stand' &&
+                        e.mobType !== 'Villager' &&
+                        e.mobType !== 'Iron Golem'
+    const entity = bot.nearestEntity(filter)
+    if (!bot.time.isDay && !bot.isSleeping && !entity)
+        goToSleep()
+    else if ((bot.time.isDay && bot.isSleeping) || (bot.isSleeping && entity)) {
+        wakeUp()
+        bot.pvp.attack(entity)
+    }
+})
+  
+bot.on('sleep', () => {
+    bot.chat('Good night!')
+})
+
+bot.on('wake', () => {
+    bot.chat('Good morning!')
+})
+async function goToSleep () {
+    const bed = bot.findBlock({
+        matching: block => bot.isABed(block)
+    })
+
+    if (bed) {
+        try {
+            await bot.sleep(bed)
+            bot.chat("I'm sleeping")
+        } catch (err) {}
+    }
+}
+
+async function wakeUp () {
+    try {
+        await bot.wake()
+    } catch (err) {
+        bot.chat(`I can't wake up: ${err.message}`)
+    }
+}
 ///////////////////////////////////////////////////////////////////////////////
 
 
