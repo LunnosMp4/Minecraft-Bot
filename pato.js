@@ -24,8 +24,8 @@ if (process.argv.length < 2 || process.argv.length > 6) {
 
 const bot = mineflayer.createBot({
     username: process.argv[2] || 'Pato',
-    host: process.argv[3],
-    port: process.argv[4]
+    port: process.argv[3]
+    // port: process.argv[4]
 })
 
 bot.loadPlugin(toolPlugin)
@@ -38,6 +38,19 @@ bot.loadPlugin(navigatePlugin)
 
 
 
+//////////////////////////////// Terminal Commands ////////////////////////////////
+bot.on('login', () => {
+  const r = repl.start('> ')
+  r.context.bot = bot
+
+  r.on('exit', () => {
+    bot.end()
+  })
+})
+///////////////////////////////////////////////////////////////////////////////
+
+
+
 //////////////////////////////// On Player Join ////////////////////////////////
 bot.on("playerJoined", (player) => {
     if (player.username != bot.username) {
@@ -46,6 +59,11 @@ bot.on("playerJoined", (player) => {
 })
 ///////////////////////////////////////////////////////////////////////////////
 
+
+bot.on("nonSpokenChat", (message) => {
+  if (message == "sal")
+    bot.chat("hola")
+})
 
 
 /////////////////////////////////// When Spawn ////////////////////////////////
@@ -90,12 +108,12 @@ function getRandomInt(max) {
 
 ///////////////////////////////////// Chest ////////////////////////////////////
 function sayItems (items = bot.inventory.items()) {
-    const output = items.map(itemToString).join(', ')
-    if (output) {
-      bot.chat(output)
-    } else {
-      bot.chat('empty')
-    }
+  const output = items.map(itemToString).join(', ')
+  if (output) {
+    bot.chat(output)
+  } else {
+    bot.chat('empty')
+  }
 }
 
 function itemToString (item) {
@@ -141,7 +159,7 @@ async function watchChest (minecart, blocks = []) {
     chest.on('close', () => {
       bot.chat('chest closed')
     })
-  
+
     bot.on('chat', onChat)
     function onChat (username, message) {
       if (username === bot.username) return
@@ -158,12 +176,12 @@ async function watchChest (minecart, blocks = []) {
           break
       }
     }
-  
+
     function closeChest () {
       chest.close()
       bot.removeListener('chat', onChat)
     }
-  
+
     async function withdrawItem (name, amount) {
       const item = chest.containerItems().find(item => item.name.includes(name))
       if (item) {
@@ -177,7 +195,7 @@ async function watchChest (minecart, blocks = []) {
         bot.chat(`unknown item ${name}`)
       }
     }
-  
+
     async function depositItem (name, amount) {
       const item = bot.inventory.items().find(item => item.name.includes(name))
       if (item) {
@@ -363,7 +381,7 @@ async function equipItem (name, destination) {
       bot.chat(`I have no ${name}`)
     }
   }
-  
+
   async function unequipItem (destination) {
     try {
       await bot.unequip(destination)
@@ -372,7 +390,7 @@ async function equipItem (name, destination) {
       bot.chat(`cannot unequip: ${err.message}`)
     }
   }
-  
+
   function useEquippedItem () {
     bot.chat('activating item')
     bot.activateItem()
