@@ -5,6 +5,7 @@
 const mineflayer = require('mineflayer')
 const {vec3} = require('vec3')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
+const mineflayerViewer = require('prismarine-viewer').mineflayer
 const navigatePlugin = require('mineflayer-navigate');
 const GoalFollow = goals.GoalFollow
 const { GoalNear } = require('mineflayer-pathfinder').goals
@@ -14,7 +15,7 @@ const toolPlugin = require('mineflayer-tool').plugin
 const armorManager = require('mineflayer-armor-manager')
 const inventoryViewer = require('mineflayer-web-inventory')
 const autoeat = require("mineflayer-auto-eat")
-const { mineflayer: mineflayerViewer } = require('prismarine-viewer')
+const repl = require('repl')
 
 if (process.argv.length < 2 || process.argv.length > 6) {
     console.log('Usage : node bot.js <name> <host> <password> <port>')
@@ -35,7 +36,38 @@ bot.loadPlugin(pathfinder)
 bot.loadPlugin(pvp)
 bot.loadPlugin(navigatePlugin)
 
-inventoryViewer(bot)
+
+
+//////////////////////////////// On Player Join ////////////////////////////////
+bot.on("playerJoined", (player) => {
+    if (player.username != bot.username) {
+        bot.chat("Hello " + player.username)
+    }
+})
+///////////////////////////////////////////////////////////////////////////////
+
+
+
+/////////////////////////////////// When Spawn ////////////////////////////////
+bot.once('spawn', () => {
+    bot.chat("Hi, I'm Pato, don't call me from too far or I will leave !")
+    const mcData = require('minecraft-data')(bot.version)
+    const defaultMove = new Movements(bot, mcData)
+    bot.autoEat.options.priority = "foodPoints"
+    bot.autoEat.options.bannedFood = []
+    bot.autoEat.options.eatingTimeout = 3
+    mineflayerViewer(bot, { port: 3001, firstPerson: true })
+    mineflayerViewer(bot, { port: 3002, firstPerson: false })
+
+    bot.autoEat.options = {
+        priority: "foodPoints",
+        startAt: 14,
+        bannedFood: ["golden_apple", "enchanted_golden_apple", "rotten_flesh"],
+    }
+})
+///////////////////////////////////////////////////////////////////////////////
+
+
 
 //////////////////////////////// Get Weapons //////////////////////////////////
 function getWeapons() {
@@ -43,42 +75,6 @@ function getWeapons() {
     if (sword) bot.equip(sword, 'hand')
     const shield = bot.inventory.items().find(item => item.name.includes('shield'))
     if (shield) bot.equip(shield, 'off-hand')
-}
-///////////////////////////////////////////////////////////////////////////////
-
-
-
-//////////////////////////////// Drop Items //////////////////////////////////
-function dropItems(args) {
-    if (args.length < 2 || args.length > 3) {
-        bot.chat("please specify a block")
-        return
-    }
-    const mcData = require('minecraft-data')(bot.version)
-    const types = args[1]
-    const blockType = mcData.blocksByName[types]
-    if (!blockType) {
-        const ItemType = mcData.itemsByName[types]
-        if (!ItemType) {
-            bot.chat(`I don't know any items named ${types}.`)
-            return
-        }
-    }
-    if (bot.inventory.items().find(item => item.name.includes(args[1]))) {
-        if (!blockType) {
-            const ItemType = mcData.itemsByName[types]
-            if (!ItemType) {
-                return
-            }
-            bot.chat("I give you this !")
-            bot.toss(ItemType.id, null, 1);
-        } else {
-            bot.chat("I give you this !")
-            let count = 1
-            bot.toss(blockType.id, null, count);
-        }
-    } else
-        bot.chat("I don't have this item currently!");
 }
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -147,7 +143,6 @@ async function watchChest (minecart, blocks = []) {
     })
   
     bot.on('chat', onChat)
-  
     function onChat (username, message) {
       if (username === bot.username) return
       const command = message.split(' ')
@@ -287,22 +282,165 @@ else bot.autoEat.enable()
 
 
 
-/////////////////////////////////// When Spawn ////////////////////////////////
-bot.once('spawn', () => {
-    bot.chat("Hi, I'm Pato, don't call me from too far or I will leave !")
-    const mcData = require('minecraft-data')(bot.version)
-    const defaultMove = new Movements(bot, mcData)
-    bot.autoEat.options.priority = "foodPoints"
-    bot.autoEat.options.bannedFood = []
-    bot.autoEat.options.eatingTimeout = 3
-
-    bot.autoEat.options = {
-        priority: "foodPoints",
-        startAt: 14,
-        bannedFood: ["golden_apple", "enchanted_golden_apple", "rotten_flesh"],
-    }
-})
 ///////////////////////////////////////////////////////////////////////////////
+async function craftItem (name, amount, blocks = []) {
+    amount = parseInt(amount, 10)
+    const mcData = require('minecraft-data')(bot.version)
+
+    const item = mcData.findItemOrBlockByName(name)
+
+    craftingTable = bot.findBlock({
+        matching: blocks.map(name => mcData.blocksByName[name].id),
+        maxDistance: 64
+      })
+
+    if (!craftingTable) {
+        bot.chat('no crafting table found')
+        return
+    }
+
+    const p = craftingTable.position
+    const defaultMove = new Movements(bot, mcData)
+    await bot.pathfinder.setMovements(defaultMove)
+    await bot.pathfinder.setGoal(new GoalNear(p.x, p.y, p.z, 1))
+
+    if (item) {
+      const recipe = bot.recipesFor(item.id, null, 1, craftingTable)[0]
+      if (recipe) {
+        bot.chat(`I can make ${name}`)
+        try {
+          await bot.craft(recipe, amount, craftingTable)
+          bot.chat(`did the recipe for ${name} ${amount} times`)
+          dropItem(name, amount)
+        } catch (err) {
+          bot.chat(`error making ${name}`)
+        }
+      } else {
+        bot.chat(`I cannot make ${name}`)
+      }
+    } else {
+      bot.chat(`unknown item: ${name}`)
+    }
+  }
+///////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////// Drop Item //////////////////////////////////
+async function dropItem (name, amount) {
+    amount = parseInt(amount, 10)
+    const item = itemByName(name)
+    if (!item) {
+      bot.chat(`I have no ${name}`)
+    } else {
+      try {
+        if (amount) {
+          await bot.toss(item.type, null, amount)
+          bot.chat(`dropped ${amount} x ${name}`)
+        } else {
+          await bot.tossStack(item)
+          bot.chat(`dropped ${name}`)
+        }
+      } catch (err) {
+        bot.chat(`unable to drop: ${err.message}`)
+      }
+    }
+  }
+///////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////// Equip Unequip /////////////////////////////////
+async function equipItem (name, destination) {
+    const item = itemByName(name)
+    if (item) {
+      try {
+        await bot.equip(item, destination)
+        bot.chat(`equipped ${name}`)
+      } catch (err) {
+        bot.chat(`cannot equip ${name}: ${err.message}`)
+      }
+    } else {
+      bot.chat(`I have no ${name}`)
+    }
+  }
+  
+  async function unequipItem (destination) {
+    try {
+      await bot.unequip(destination)
+      bot.chat('unequipped')
+    } catch (err) {
+      bot.chat(`cannot unequip: ${err.message}`)
+    }
+  }
+  
+  function useEquippedItem () {
+    bot.chat('activating item')
+    bot.activateItem()
+  }
+///////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////// Chat Drop Craft Equip //////////////////////////////
+bot.on('chat', async (username, message) => {
+    if (username === bot.username) return
+    const command = message.split(' ')
+    switch (true) {
+      case message === 'loaded':
+        await bot.waitForChunksToLoad()
+        bot.chat('Ready!')
+        break
+      case /^list$/.test(message):
+        sayItems()
+        break
+      case /^drop \d+ \w+$/.test(message):
+        dropItem(command[2], command[1])
+        break
+      case /^drop \w+$/.test(message):
+        dropItem(command[1])
+        break
+      case /^equip [\w-]+ \w+$/.test(message):
+        equipItem(command[2], command[1])
+        break
+      case /^unequip \w+$/.test(message):
+        unequipItem(command[1])
+        break
+      case /^use$/.test(message):
+        useEquippedItem()
+        break
+      case /^craft \d+ \w+$/.test(message):
+        craftItem(command[2], command[1], ['crafting_table'])
+        break
+    }
+  })
+  
+  function sayItems (items = null) {
+    if (!items) {
+      items = bot.inventory.items()
+      if (require('minecraft-data')(bot.version).isNewerOrEqualTo('1.9') && bot.inventory.slots[45]) items.push(bot.inventory.slots[45])
+    }
+    const output = items.map(itemToString).join(', ')
+    if (output) {
+      bot.chat(output)
+    } else {
+      bot.chat('empty')
+    }
+  }
+  
+  function itemToString (item) {
+    if (item) {
+      return `${item.name} x ${item.count}`
+    } else {
+      return '(nothing)'
+    }
+  }
+  
+  function itemByName (name) {
+    const items = bot.inventory.items()
+    if (require('minecraft-data')(bot.version).isNewerOrEqualTo('1.9') && bot.inventory.slots[45]) items.push(bot.inventory.slots[45])
+    return items.filter(item => item.name === name)[0]
+  }
+///////////////////////////////////////////////////////////////////////////////
+
 
 
 ////////////////////////////////// When Collect ///////////////////////////////
@@ -442,7 +580,7 @@ async function wakeUp () {
 bot.on('chat', (username, message) => {
     const mcData = require('minecraft-data')(bot.version)
     const defaultMove = new Movements(bot, mcData)
-
+    console.log(username + " : " + message)
     const args = message.split(' ')
     if (args.length === 2)
         username = args[1]
@@ -456,19 +594,31 @@ bot.on('chat', (username, message) => {
         bot.chat('  guard -> El pato guard an area')
         bot.chat('  guard [Player] -> El pato protect and follow a player')
         bot.chat('  s[command] -> El pato stop [command]')
-        bot.chat('  drop [item] -> Drop [item] from his inventory')
+        bot.chat('  drop [x] [item] -> Drop [x] [item] from his inventory')
         bot.chat('  stat -> Show Health, Food and XP level of the bot')
         bot.chat('  chest -> Go to nearest and open it')
         bot.chat('  > In chest > close -> Close the chest')
         bot.chat("  > In chest > take [x] [item] -> Withdraw [x] [items] from the chest")
         bot.chat("  > In chest > deposit [x] [item] -> Deposit [x] [items] in the chest")
+        bot.chat("  craft [x] [item] -> Craft [item] with a crafting table")
+        bot.chat("  equip [destination] [item] -> equip item to a destination")
+        bot.chat("  unequip [destination] -> unequip [destination] from the item")
+        bot.chat("  list -> list all of his items")
     } else if (args[0] === 'attack')
         attackEntity()
-    else if (args[0] === "follow" || args[0] === "flw") { // START FOLLOW
+    else if (args[0] === "follow" || args[0] === "flw") // START FOLLOW
         followPlayer(username)
-    } else if (args[0] === "debug") // DEBUG
-        bot.chat("tp" + username)
-    else if (args[0] === "sfollow" || args[0] === "sflw") // STOP FOLLOW
+    else if (args[0] === "ping") { // Ping
+        if (args.length === 3) {
+            username = args[2]
+        }
+        if (!username) {
+            bot.chat("This player doesn't exist !")
+            return
+        }
+        const player = bot.players[username]
+        bot.chat("ping : " + player.ping)
+    } else if (args[0] === "sfollow" || args[0] === "sflw") // STOP FOLLOW
         bot.pathfinder.stop()
     else if (args[0] === 'come') // COME TO ME
         comeToMe(username)
@@ -502,8 +652,6 @@ bot.on('chat', (username, message) => {
         bot.chat("Health :" + ' ' + bot.health)
         bot.chat("Food :" + ' ' + bot.food)
         bot.chat("XP Levels :" + ' ' + bot.experience.level)
-    } else if (args[0] === 'drop') {
-        dropItems(args)
     } else if (args[0] === 'chest')
         watchChest(false, ['chest', 'ender_chest', 'trapped_chest'])
     else if (args[0] === 'stop')
