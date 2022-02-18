@@ -24,8 +24,8 @@ if (process.argv.length < 2 || process.argv.length > 6) {
 
 const bot = mineflayer.createBot({
     username: process.argv[2] || 'Pato',
-    port: process.argv[3]
-    // port: process.argv[4]
+    host: process.argv[3],
+    port: process.argv[4]
 })
 
 bot.loadPlugin(toolPlugin)
