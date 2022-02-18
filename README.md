@@ -6,6 +6,9 @@ A Minecraft Bot named Pato who is able to perform actions like a real player.
 
 ## Installation
 
+First, install nodeJS:
+https://nodejs.org/en/download/
+
 On Linux:
 
 ```bash
