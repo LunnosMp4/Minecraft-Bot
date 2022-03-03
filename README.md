@@ -54,7 +54,7 @@ To execute bot commands in game, just write them in the Minecraft chat.
 To see all the available commands use the help command.
 
 3 web servers will launch on your localhost:
-- http://localhost:3000/ -> Inventory Viewer
+- http://localhost:3000/ -> Inventory Viewer (currently not working)
 - http://localhost:3001/ -> First Person Viewer
 - http://localhost:3002/ -> Free Cam Viewer
 
